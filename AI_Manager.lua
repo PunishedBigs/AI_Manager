@@ -114,8 +114,11 @@ function AIManager_SaveChanges()
         dataString = dataString .. key .. "=" .. tostring(value) .. ";";
     end
     
-    -- This will need to be updated to use the same method.
-    -- SendAddonMessage("AIMGR", "SAVE_CONFIG " .. dataString, "GUILD");
+    -- Send the save command and the data string to the server.
+    SendAddonMessage("AIMGR", "SAVE_CONFIG " .. dataString, "GUILD");
+    
+    -- After saving, immediately request a refresh of the status and config.
+    AIManager_RequestConfig();
 end
 
 function AIManager_ChatFilter(self, event, msg, ...)
