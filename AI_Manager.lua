@@ -1,5 +1,5 @@
 -- ===================================================================
--- FILE: AI_Manager.lua (with Robust Message Queue)
+-- FILE: AI_Manager.lua (with Chunking for large data)
 -- ===================================================================
 local addonName, addonTable = ...;
 
@@ -111,22 +111,34 @@ end
 function AIManager_SaveChanges()
     local dataString = "";
     
-    -- Check which page is visible to decide what to save
     if AIManagerNetworkPage:IsShown() then
         dataString = "host=" .. AIManagerNetworkIPBox:GetText() .. ";" ..
                      "port=" .. AIManagerNetworkPortBox:GetText() .. ";";
     elseif AIManagerSamplersPage:IsShown() then
-        -- FIX: Get the values directly from the EditBoxes, not the sliders.
-        -- This ensures that values typed by the user are saved correctly.
         dataString = "max_context_length=" .. AIManagerContextSizeBox:GetText() .. ";" ..
                      "max_length=" .. AIManagerMaxLengthBox:GetText() .. ";" ..
                      "temperature=" .. AIManagerTempBox:GetText() .. ";" ..
                      "repetition_penalty=" .. AIManagerRepPenBox:GetText() .. ";" ..
                      "top_p=" .. AIManagerTopPBox:GetText() .. ";" ..
                      "top_k=" .. AIManagerTopKBox:GetText() .. ";";
+    elseif AIManagerFormatPage:IsShown() then
+        local prompt = AIManagerSysPromptBox:GetText();
+        prompt = string.gsub(prompt, "\n", "||NL||");
+        dataString = "system_prompt=" .. prompt .. ";" ..
+                     "system_tag=" .. AIManagerSystemTagBox:GetText() .. ";" ..
+                     "user_tag=" .. AIManagerUserTagBox:GetText() .. ";" ..
+                     "assistant_tag=" .. AIManagerAssistantTagBox:GetText() .. ";";
     end
 
-    SendAddonMessage("AIMGR", "SAVE_CONFIG " .. dataString, "GUILD");
+    -- FIX: Send the data in chunks to avoid the 255 character limit.
+    local chunkSize = 200;
+    SendAddonMessage("AIMGR", "SAVE_CONFIG_START", "GUILD");
+    for i = 1, math.ceil(string.len(dataString) / chunkSize) do
+        local chunk = string.sub(dataString, (i - 1) * chunkSize + 1, i * chunkSize);
+        SendAddonMessage("AIMGR", "SAVE_CONFIG_CHUNK " .. chunk, "GUILD");
+    end
+    SendAddonMessage("AIMGR", "SAVE_CONFIG_END", "GUILD");
+
     AIManager_RequestConfig(); -- Refresh data after saving
 end
 
@@ -145,11 +157,12 @@ end
 
 function AIManager_ParseConfig(configStr)
     for key, value in string.gmatch(configStr, "([^=]+)=([^;]+);") do
-        -- Convert to number where appropriate for sliders
         if key == "port" or key == "max_context_length" or key == "max_length" or key == "top_k" then
             currentConfig[key] = tonumber(value);
         elseif key == "temperature" or key == "repetition_penalty" or key == "top_p" then
             currentConfig[key] = tonumber(value);
+        elseif key == "system_prompt" then
+            currentConfig[key] = string.gsub(value, "||NL||", "\n");
         else
             currentConfig[key] = value;
         end
@@ -187,6 +200,12 @@ function AIManager_PopulateUI()
         AIManagerTopKSlider:SetValue(currentConfig.top_k);
         AIManagerTopKBox:SetText(currentConfig.top_k);
     end
+
+    -- Format Page
+    if currentConfig.system_prompt then AIManagerSysPromptBox:SetText(currentConfig.system_prompt) end
+    if currentConfig.system_tag then AIManagerSystemTagBox:SetText(currentConfig.system_tag) end
+    if currentConfig.user_tag then AIManagerUserTagBox:SetText(currentConfig.user_tag) end
+    if currentConfig.assistant_tag then AIManagerAssistantTagBox:SetText(currentConfig.assistant_tag) end
 end
 
 function AIManager_SetConnectionStatus(isConnected)
