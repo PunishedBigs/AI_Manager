@@ -1,0 +1,14 @@
+<!-- =================================================================== -->
+<!-- FILE 1: AI_Manager.toc                                              -->
+<!-- =================================================================== -->
+<!-- This file tells WoW what your AddOn is and what files to load.      -->
+<!-- =================================================================== -->
+## Interface: 30300
+## Title: AI Manager
+## Notes: Manages the configuration for the NPC AI Chat Mod.
+## Author: You
+## Version: 1.0
+## SlashCmds: /aim, /aimanager
+
+AI_Manager.xml
+AI_Manager.lua
