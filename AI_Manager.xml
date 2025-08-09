@@ -1,220 +1,138 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 	<Script file="AI_Manager.lua"/>
 
-	<!-- Main Frame -->
+    <Slider name="AIManagerSliderTemplate" virtual="true" orientation="HORIZONTAL">
+        <Size x="220" y="17"/>
+        <Layers>
+            <Layer level="BACKGROUND">
+                <Texture name="$parentTrack" file="Interface\Buttons\UI-SliderBar-Background">
+                    <Size x="220" y="17"/>
+                    <Anchors>
+                        <Anchor point="CENTER"/>
+                    </Anchors>
+                </Texture>
+            </Layer>
+        </Layers>
+        <ThumbTexture name="$parentThumb" file="Interface\Buttons\UI-SliderBar-Button-Horizontal">
+            <Size x="24" y="24"/>
+        </ThumbTexture>
+    </Slider>
+
 	<Frame name="AIManagerFrame" parent="UIParent" movable="true" enableMouse="true" hidden="true" clampedToScreen="true">
 		<Size x="750" y="550"/>
-		<Anchors>
-			<Anchor point="CENTER"/>
-		</Anchors>
+		<Anchors><Anchor point="CENTER"/></Anchors>
 		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
 			<BackgroundInsets left="11" right="12" top="12" bottom="11"/>
-			<TileSize val="32"/>
-			<EdgeSize val="32"/>
+			<TileSize val="32"/><EdgeSize val="32"/>
 		</Backdrop>
 		<Layers>
 			<Layer level="ARTWORK">
 				<Texture name="$parentTitle" file="Interface\DialogFrame\UI-DialogBox-Header">
-					<Size x="300" y="64"/>
-					<Anchors>
-						<Anchor point="TOP" x="0" y="12"/>
-					</Anchors>
+					<Size x="300" y="64"/><Anchors><Anchor point="TOP" x="0" y="12"/></Anchors>
 				</Texture>
 				<FontString name="$parentTitleText" inherits="GameFontNormal" text="AI Manager">
-					<Anchors>
-						<Anchor point="TOP" relativeTo="$parentTitle" x="0" y="-14"/>
-					</Anchors>
+					<Anchors><Anchor point="TOP" relativeTo="$parentTitle" x="0" y="-14"/></Anchors>
 				</FontString>
 			</Layer>
 		</Layers>
 		<Frames>
-			<!-- Close Button -->
 			<Button name="$parentCloseButton" inherits="UIPanelCloseButton">
-				<Anchors>
-					<Anchor point="TOPRIGHT" x="-3" y="-3"/>
-				</Anchors>
+				<Anchors><Anchor point="TOPRIGHT" x="-3" y="-3"/></Anchors>
 			</Button>
 
-			<!-- Menu Bar -->
 			<Frame name="AIManagerMenuFrame">
 				<Size x="150" y="485"/>
-				<Anchors>
-					<Anchor point="TOPLEFT" x="16" y="-40"/>
-				</Anchors>
+				<Anchors><Anchor point="TOPLEFT" x="16" y="-40"/></Anchors>
 				<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" tile="true">
 					<Color r="0.05" g="0.05" b="0.05" a="0.9"/>
 				</Backdrop>
 				<Frames>
-					<Button name="AIManagerMenuButton1" text="Network">
-						<Size x="130" y="25"/>
-						<Anchors>
-							<Anchor point="TOPLEFT" x="10" y="-40"/>
-						</Anchors>
-						<ButtonText justifyH="LEFT">
-							<Anchors>
-								<Anchor point="LEFT" x="5" y="0"/>
-							</Anchors>
-						</ButtonText>
-						<NormalFont style="GameFontNormalLarge"/>
-						<HighlightFont style="GameFontNormalLarge"/>
-						<HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/>
-						<Scripts>
-							<OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton1)</OnClick>
-						</Scripts>
-					</Button>
-					<Button name="AIManagerMenuButton2" text="Format">
-						<Size x="130" y="25"/>
-						<Anchors>
-							<Anchor point="TOPLEFT" relativeTo="AIManagerMenuButton1" relativePoint="BOTTOMLEFT" x="0" y="-10"/>
-						</Anchors>
-						<ButtonText justifyH="LEFT">
-							<Anchors>
-								<Anchor point="LEFT" x="5" y="0"/>
-							</Anchors>
-						</ButtonText>
-						<NormalFont style="GameFontNormalLarge"/>
-						<HighlightFont style="GameFontNormalLarge"/>
-						<HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/>
-						<Scripts>
-							<OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton2)</OnClick>
-						</Scripts>
-					</Button>
-					<Button name="AIManagerMenuButton3" text="Samplers">
-						<Size x="130" y="25"/>
-						<Anchors>
-							<Anchor point="TOPLEFT" relativeTo="AIManagerMenuButton2" relativePoint="BOTTOMLEFT" x="0" y="-10"/>
-						</Anchors>
-						<ButtonText justifyH="LEFT">
-							<Anchors>
-								<Anchor point="LEFT" x="5" y="0"/>
-							</Anchors>
-						</ButtonText>
-						<NormalFont style="GameFontNormalLarge"/>
-						<HighlightFont style="GameFontNormalLarge"/>
-						<HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/>
-						<Scripts>
-							<OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton3)</OnClick>
-						</Scripts>
-					</Button>
-					<Button name="AIManagerMenuButton4" text="Characters">
-						<Size x="130" y="25"/>
-						<Anchors>
-							<Anchor point="TOPLEFT" relativeTo="AIManagerMenuButton3" relativePoint="BOTTOMLEFT" x="0" y="-10"/>
-						</Anchors>
-						<ButtonText justifyH="LEFT">
-							<Anchors>
-								<Anchor point="LEFT" x="5" y="0"/>
-							</Anchors>
-						</ButtonText>
-						<NormalFont style="GameFontNormalLarge"/>
-						<HighlightFont style="GameFontNormalLarge"/>
-						<HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/>
-						<Scripts>
-							<OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton4)</OnClick>
-						</Scripts>
-					</Button>
+					<Button name="AIManagerMenuButton1" text="Network"><Size x="130" y="25"/><Anchors><Anchor point="TOPLEFT" x="10" y="-40"/></Anchors><ButtonText justifyH="LEFT"><Anchors><Anchor point="LEFT" x="5" y="0"/></Anchors></ButtonText><NormalFont style="GameFontNormalLarge"/><HighlightFont style="GameFontNormalLarge"/><HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/><Scripts><OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton1)</OnClick></Scripts></Button>
+					<Button name="AIManagerMenuButton2" text="Format"><Size x="130" y="25"/><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerMenuButton1" relativePoint="BOTTOMLEFT" x="0" y="-10"/></Anchors><ButtonText justifyH="LEFT"><Anchors><Anchor point="LEFT" x="5" y="0"/></Anchors></ButtonText><NormalFont style="GameFontNormalLarge"/><HighlightFont style="GameFontNormalLarge"/><HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/><Scripts><OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton2)</OnClick></Scripts></Button>
+					<Button name="AIManagerMenuButton3" text="Samplers"><Size x="130" y="25"/><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerMenuButton2" relativePoint="BOTTOMLEFT" x="0" y="-10"/></Anchors><ButtonText justifyH="LEFT"><Anchors><Anchor point="LEFT" x="5" y="0"/></Anchors></ButtonText><NormalFont style="GameFontNormalLarge"/><HighlightFont style="GameFontNormalLarge"/><HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/><Scripts><OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton3)</OnClick></Scripts></Button>
+					<Button name="AIManagerMenuButton4" text="Characters"><Size x="130" y="25"/><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerMenuButton3" relativePoint="BOTTOMLEFT" x="0" y="-10"/></Anchors><ButtonText justifyH="LEFT"><Anchors><Anchor point="LEFT" x="5" y="0"/></Anchors></ButtonText><NormalFont style="GameFontNormalLarge"/><HighlightFont style="GameFontNormalLarge"/><HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/><Scripts><OnClick>AIManager_MenuButton_OnClick(AIManagerMenuButton4)</OnClick></Scripts></Button>
 				</Frames>
 				<Layers>
 					<Layer level="OVERLAY">
-						<FontString name="$parentTitle" inherits="GameFontNormalLarge" text="Settings">
-							<Anchors>
-								<Anchor point="TOP" x="0" y="-10"/>
-							</Anchors>
-						</FontString>
+						<FontString name="$parentTitle" inherits="GameFontNormalLarge" text="Settings"><Anchors><Anchor point="TOP" x="0" y="-10"/></Anchors></FontString>
 					</Layer>
 				</Layers>
 			</Frame>
 
-			<!-- Main Content Area -->
 			<Frame name="AIManagerContentFrame">
 				<Size x="560" y="510"/>
-				<Anchors>
-					<Anchor point="TOPLEFT" relativeTo="AIManagerMenuFrame" relativePoint="TOPRIGHT" x="5" y="0"/>
-				</Anchors>
+				<Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerMenuFrame" relativePoint="TOPRIGHT" x="5" y="0"/></Anchors>
 				<Frames>
-					<!-- Network Page -->
 					<Frame name="AIManagerNetworkPage" setAllPoints="true" hidden="true">
 						<Layers>
 							<Layer level="ARTWORK">
-								<FontString name="AIManagerNetworkLabel" inherits="GameFontNormal" text="Kobold Server IP:Port">
-									<Anchors>
-										<Anchor point="TOPLEFT" x="20" y="-87"/>
-									</Anchors>
-								</FontString>
+								<FontString name="AIManagerNetworkLabel" inherits="GameFontNormal" text="Kobold Server IP:Port"><Anchors><Anchor point="TOPLEFT" x="20" y="-87"/></Anchors></FontString>
 							</Layer>
 						</Layers>
 						<Frames>
-							<!-- Refresh Button (Moved) -->
-							<Button name="AIManagerRefreshButton" inherits="UIPanelButtonTemplate" text="Refresh">
-								<Size x="100" y="25"/>
-								<Anchors>
-									<Anchor point="TOPLEFT" x="40" y="-28"/>
-								</Anchors>
-								<Scripts>
-									<OnClick>AIManager_RequestConfig()</OnClick>
-								</Scripts>
-							</Button>
-
-							<!-- Status Indicator -->
-							<Frame name="AIManagerStatusIndicator">
-								<Size x="200" y="40"/>
-								<Anchors>
-									<Anchor point="TOP" x="0" y="-20"/>
-								</Anchors>
-								<Layers>
-									<Layer level="BACKGROUND">
-										<Texture name="$parentCircle" file="Interface\Buttons\WHITE8X8">
-											<Size x="24" y="24"/>
-											<Anchors>
-												<Anchor point="LEFT"/>
-											</Anchors>
-										</Texture>
-									</Layer>
-									<Layer level="ARTWORK">
-										<FontString name="$parentText" inherits="GameFontNormalLarge" text="Unknown">
-											<Anchors>
-												<Anchor point="LEFT" x="30" y="0"/>
-											</Anchors>
-										</FontString>
-									</Layer>
-								</Layers>
-							</Frame>
-							<!-- IP Address -->
-							<EditBox name="AIManagerNetworkIPBox" inherits="InputBoxTemplate" autoFocus="false">
-								<Size x="200" y="32"/>
-								<Anchors>
-									<Anchor point="LEFT" relativeTo="AIManagerNetworkLabel" relativePoint="RIGHT" x="10" y="0"/>
-								</Anchors>
-								<Scripts>
-									<OnEnterPressed>self:ClearFocus()</OnEnterPressed>
-								</Scripts>
-							</EditBox>
-							<!-- Port -->
-							<EditBox name="AIManagerNetworkPortBox" inherits="InputBoxTemplate" autoFocus="false" numeric="true">
-								<Size x="80" y="32"/>
-								<Anchors>
-									<Anchor point="LEFT" relativeTo="AIManagerNetworkIPBox" relativePoint="RIGHT" x="10" y="0"/>
-								</Anchors>
-								<Scripts>
-									<OnEnterPressed>self:ClearFocus()</OnEnterPressed>
-								</Scripts>
-							</EditBox>
-							<!-- Apply Button (Renamed and Moved) -->
-							<Button name="AIManagerNetworkApplyButton" inherits="UIPanelButtonTemplate" text="Apply">
-								<Size x="100" y="25"/>
-								<Anchors>
-									<Anchor point="LEFT" relativeTo="AIManagerNetworkPortBox" relativePoint="RIGHT" x="10" y="0"/>
-								</Anchors>
-								<Scripts>
-									<OnClick>AIManager_SaveChanges()</OnClick>
-								</Scripts>
-							</Button>
+							<Button name="AIManagerRefreshButton" inherits="UIPanelButtonTemplate" text="Refresh"><Size x="100" y="25"/><Anchors><Anchor point="TOPLEFT" x="40" y="-28"/></Anchors><Scripts><OnClick>AIManager_RequestConfig()</OnClick></Scripts></Button>
+							<Frame name="AIManagerStatusIndicator"><Size x="200" y="40"/><Anchors><Anchor point="TOP" x="0" y="-20"/></Anchors><Layers><Layer level="BACKGROUND"><Texture name="$parentCircle" file="Interface\Buttons\WHITE8X8"><Size x="24" y="24"/><Anchors><Anchor point="LEFT"/></Anchors></Texture></Layer><Layer level="ARTWORK"><FontString name="$parentText" inherits="GameFontNormalLarge" text="Unknown"><Anchors><Anchor point="LEFT" x="30" y="0"/></Anchors></FontString></Layer></Layers></Frame>
+							<EditBox name="AIManagerNetworkIPBox" inherits="InputBoxTemplate" autoFocus="false"><Size x="200" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerNetworkLabel" relativePoint="RIGHT" x="10" y="0"/></Anchors><Scripts><OnEnterPressed>self:ClearFocus()</OnEnterPressed></Scripts></EditBox>
+							<EditBox name="AIManagerNetworkPortBox" inherits="InputBoxTemplate" autoFocus="false" numeric="true"><Size x="80" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerNetworkIPBox" relativePoint="RIGHT" x="10" y="0"/></Anchors><Scripts><OnEnterPressed>self:ClearFocus()</OnEnterPressed></Scripts></EditBox>
+							<Button name="AIManagerNetworkApplyButton" inherits="UIPanelButtonTemplate" text="Apply"><Size x="100" y="25"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerNetworkPortBox" relativePoint="RIGHT" x="10" y="0"/></Anchors><Scripts><OnClick>AIManager_SaveChanges()</OnClick></Scripts></Button>
 						</Frames>
 					</Frame>
 
-					<!-- Other Pages -->
 					<Frame name="AIManagerFormatPage" setAllPoints="true" hidden="true"/>
-					<Frame name="AIManagerSamplersPage" setAllPoints="true" hidden="true"/>
+
+                    <Frame name="AIManagerSamplersPage" setAllPoints="true" hidden="true">
+                        <Frames>
+                            <!-- Column 1 -->
+                            <Slider name="AIManagerContextSizeSlider" inherits="AIManagerSliderTemplate" minValue="512" maxValue="8192" valueStep="1"><Anchors><Anchor point="TOPLEFT" x="20" y="-60"/></Anchors></Slider>
+                            <Slider name="AIManagerTempSlider" inherits="AIManagerSliderTemplate" minValue="0.1" maxValue="2" valueStep="0.01"><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerContextSizeSlider" relativePoint="BOTTOMLEFT" x="0" y="-80"/></Anchors></Slider>
+                            <Slider name="AIManagerTopPSlider" inherits="AIManagerSliderTemplate" minValue="0" maxValue="1" valueStep="0.01"><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerTempSlider" relativePoint="BOTTOMLEFT" x="0" y="-80"/></Anchors></Slider>
+                            
+                            <!-- Column 2 -->
+                            <Slider name="AIManagerMaxLengthSlider" inherits="AIManagerSliderTemplate" minValue="16" maxValue="1024" valueStep="1"><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerContextSizeSlider" relativePoint="TOPRIGHT" x="80" y="0"/></Anchors></Slider>
+                            <Slider name="AIManagerRepPenSlider" inherits="AIManagerSliderTemplate" minValue="1" maxValue="2" valueStep="0.01"><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerMaxLengthSlider" relativePoint="BOTTOMLEFT" x="0" y="-80"/></Anchors></Slider>
+                            <Slider name="AIManagerTopKSlider" inherits="AIManagerSliderTemplate" minValue="0" maxValue="100" valueStep="1"><Anchors><Anchor point="TOPLEFT" relativeTo="AIManagerRepPenSlider" relativePoint="BOTTOMLEFT" x="0" y="-80"/></Anchors></Slider>
+                            
+                            <!-- EditBoxes (anchored to sliders) -->
+                            <EditBox name="AIManagerContextSizeBox" inherits="InputBoxTemplate" numeric="true"><Size x="60" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerContextSizeSlider" relativePoint="CENTER" x="10" y="22"/></Anchors></EditBox>
+                            <EditBox name="AIManagerTempBox" inherits="InputBoxTemplate"><Size x="60" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerTempSlider" relativePoint="CENTER" x="10" y="22"/></Anchors></EditBox>
+                            <EditBox name="AIManagerTopPBox" inherits="InputBoxTemplate"><Size x="60" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerTopPSlider" relativePoint="CENTER" x="10" y="22"/></Anchors></EditBox>
+                            <EditBox name="AIManagerMaxLengthBox" inherits="InputBoxTemplate" numeric="true"><Size x="60" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerMaxLengthSlider" relativePoint="CENTER" x="10" y="22"/></Anchors></EditBox>
+                            <EditBox name="AIManagerRepPenBox" inherits="InputBoxTemplate"><Size x="60" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerRepPenSlider" relativePoint="CENTER" x="10" y="22"/></Anchors></EditBox>
+                            <EditBox name="AIManagerTopKBox" inherits="InputBoxTemplate" numeric="true"><Size x="60" y="32"/><Anchors><Anchor point="LEFT" relativeTo="AIManagerTopKSlider" relativePoint="CENTER" x="10" y="22"/></Anchors></EditBox>
+
+                            <!-- Apply Button -->
+                            <Button name="AIManagerSamplersApplyButton" inherits="UIPanelButtonTemplate" text="Apply"><Size x="100" y="25"/><Anchors><Anchor point="BOTTOM" x="0" y="20"/></Anchors><Scripts><OnClick>AIManager_SaveChanges()</OnClick></Scripts></Button>
+                        </Frames>
+                        <Layers>
+                            <Layer level="ARTWORK">
+                                <!-- Labels and Min/Max Text with FIXED positions -->
+                                <FontString inherits="GameFontNormal" text="Context Size"><Anchors><Anchor point="TOPLEFT" x="20" y="-40"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="512"><Anchors><Anchor point="TOPLEFT" x="20" y="-80"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="8192" justifyH="RIGHT"><Anchors><Anchor point="TOPLEFT" x="210" y="-80"/></Anchors></FontString>
+
+                                <FontString inherits="GameFontNormal" text="Temperature"><Anchors><Anchor point="TOPLEFT" x="20" y="-135"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="0.1"><Anchors><Anchor point="TOPLEFT" x="20" y="-180"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="2" justifyH="RIGHT"><Anchors><Anchor point="TOPLEFT" x="220" y="-180"/></Anchors></FontString>
+
+                                <FontString inherits="GameFontNormal" text="Top-P Sampling"><Anchors><Anchor point="TOPLEFT" x="20" y="-235"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="0"><Anchors><Anchor point="TOPLEFT" x="20" y="-280"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="1" justifyH="RIGHT"><Anchors><Anchor point="TOPLEFT" x="220" y="-280"/></Anchors></FontString>
+
+                                <FontString inherits="GameFontNormal" text="Max Output"><Anchors><Anchor point="TOPLEFT" x="320" y="-40"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="16"><Anchors><Anchor point="TOPLEFT" x="320" y="-80"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="1024" justifyH="RIGHT"><Anchors><Anchor point="TOPLEFT" x="510" y="-80"/></Anchors></FontString>
+
+                                <FontString inherits="GameFontNormal" text="Repetition Penalty"><Anchors><Anchor point="TOPLEFT" x="320" y="-135"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="1"><Anchors><Anchor point="TOPLEFT" x="320" y="-180"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="2" justifyH="RIGHT"><Anchors><Anchor point="TOPLEFT" x="520" y="-180"/></Anchors></FontString>
+
+                                <FontString inherits="GameFontNormal" text="Top-K Sampling"><Anchors><Anchor point="TOPLEFT" x="320" y="-235"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="0"><Anchors><Anchor point="TOPLEFT" x="320" y="-280"/></Anchors></FontString>
+                                <FontString inherits="GameFontNormalSmall" text="100" justifyH="RIGHT"><Anchors><Anchor point="TOPLEFT" x="515" y="-280"/></Anchors></FontString>
+                            </Layer>
+                        </Layers>
+                    </Frame>
+
 					<Frame name="AIManagerCharactersPage" setAllPoints="true" hidden="true"/>
 				</Frames>
 			</Frame>

@@ -1,5 +1,5 @@
 -- ===================================================================
--- FILE: AI_Manager.lua (with Robust Message Queue and Final Fix)
+-- FILE: AI_Manager.lua (with Robust Message Queue)
 -- ===================================================================
 local addonName, addonTable = ...;
 
@@ -17,14 +17,10 @@ local updateFrame = CreateFrame("Frame", "AIManagerUpdateFrame")
 updateFrame:SetScript("OnUpdate", function(self, elapsed)
     if #messageQueue > 0 then
         local msg = table.remove(messageQueue, 1);
-
-        -- The definitive fix: We now look for the start of the data itself,
-        -- ignoring any leading characters or tags.
         if string.find(msg, "status=") then
             local _, _, content = string.find(msg, "status=(.+)");
             if content then AIManager_ParseStatus(content) end
         elseif string.find(msg, "host=") then
-            -- We need to reconstruct the full data string for the parser.
             local _, _, content = string.find(msg, "(host=.+)");
             if content then AIManager_ParseConfig(content) end
         end
@@ -37,7 +33,16 @@ end)
 function AIManager_OnLoad(self)
     self:RegisterForDrag("LeftButton");
     ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", AIManager_ChatFilter);
-    print("|cff3 indossffAI Manager:|r AddOn Loaded.");
+
+    -- Link sliders to their edit boxes
+    AIManager_LinkSliderToEditBox(AIManagerContextSizeSlider, AIManagerContextSizeBox, "%d");
+    AIManager_LinkSliderToEditBox(AIManagerMaxLengthSlider, AIManagerMaxLengthBox, "%d");
+    AIManager_LinkSliderToEditBox(AIManagerTempSlider, AIManagerTempBox, "%.2f");
+    AIManager_LinkSliderToEditBox(AIManagerRepPenSlider, AIManagerRepPenBox, "%.2f");
+    AIManager_LinkSliderToEditBox(AIManagerTopPSlider, AIManagerTopPBox, "%.2f");
+    AIManager_LinkSliderToEditBox(AIManagerTopKSlider, AIManagerTopKBox, "%d");
+
+    print("|cff3399ffAI Manager:|r AddOn Loaded.");
 end
 
 function AIManager_OnShow()
@@ -87,9 +92,9 @@ function AIManager_HighlightButton(buttonToHighlight)
         local text = button:GetFontString();
         if text then
             if button == buttonToHighlight then
-                text:SetTextColor(1.0, 1.0, 1.0); -- White for selected
+                text:SetTextColor(1.0, 1.0, 1.0); -- White
             else
-                text:SetTextColor(1.0, 0.82, 0.0); -- Yellow for unselected
+                text:SetTextColor(1.0, 0.82, 0.0); -- Yellow
             end
         end
     end
@@ -104,21 +109,25 @@ function AIManager_RequestConfig()
 end
 
 function AIManager_SaveChanges()
-    local newConfig = {
-        host = AIManagerNetworkIPBox:GetText(),
-        port = AIManagerNetworkPortBox:GetText()
-    };
-
     local dataString = "";
-    for key, value in pairs(newConfig) do
-        dataString = dataString .. key .. "=" .. tostring(value) .. ";";
+    
+    -- Check which page is visible to decide what to save
+    if AIManagerNetworkPage:IsShown() then
+        dataString = "host=" .. AIManagerNetworkIPBox:GetText() .. ";" ..
+                     "port=" .. AIManagerNetworkPortBox:GetText() .. ";";
+    elseif AIManagerSamplersPage:IsShown() then
+        -- FIX: Get the values directly from the EditBoxes, not the sliders.
+        -- This ensures that values typed by the user are saved correctly.
+        dataString = "max_context_length=" .. AIManagerContextSizeBox:GetText() .. ";" ..
+                     "max_length=" .. AIManagerMaxLengthBox:GetText() .. ";" ..
+                     "temperature=" .. AIManagerTempBox:GetText() .. ";" ..
+                     "repetition_penalty=" .. AIManagerRepPenBox:GetText() .. ";" ..
+                     "top_p=" .. AIManagerTopPBox:GetText() .. ";" ..
+                     "top_k=" .. AIManagerTopKBox:GetText() .. ";";
     end
-    
-    -- Send the save command and the data string to the server.
+
     SendAddonMessage("AIMGR", "SAVE_CONFIG " .. dataString, "GUILD");
-    
-    -- After saving, immediately request a refresh of the status and config.
-    AIManager_RequestConfig();
+    AIManager_RequestConfig(); -- Refresh data after saving
 end
 
 function AIManager_ChatFilter(self, event, msg, ...)
@@ -136,17 +145,47 @@ end
 
 function AIManager_ParseConfig(configStr)
     for key, value in string.gmatch(configStr, "([^=]+)=([^;]+);") do
-        currentConfig[key] = value;
+        -- Convert to number where appropriate for sliders
+        if key == "port" or key == "max_context_length" or key == "max_length" or key == "top_k" then
+            currentConfig[key] = tonumber(value);
+        elseif key == "temperature" or key == "repetition_penalty" or key == "top_p" then
+            currentConfig[key] = tonumber(value);
+        else
+            currentConfig[key] = value;
+        end
     end
     AIManager_PopulateUI();
 end
 
 function AIManager_PopulateUI()
-    if currentConfig.host then
-        AIManagerNetworkIPBox:SetText(currentConfig.host);
+    -- Network Page
+    if currentConfig.host then AIManagerNetworkIPBox:SetText(currentConfig.host) end
+    if currentConfig.port then AIManagerNetworkPortBox:SetText(currentConfig.port) end
+
+    -- Samplers Page
+    if currentConfig.max_context_length then 
+        AIManagerContextSizeSlider:SetValue(currentConfig.max_context_length);
+        AIManagerContextSizeBox:SetText(currentConfig.max_context_length);
     end
-    if currentConfig.port then
-        AIManagerNetworkPortBox:SetText(currentConfig.port);
+    if currentConfig.max_length then 
+        AIManagerMaxLengthSlider:SetValue(currentConfig.max_length);
+        AIManagerMaxLengthBox:SetText(currentConfig.max_length);
+    end
+    if currentConfig.temperature then 
+        AIManagerTempSlider:SetValue(currentConfig.temperature);
+        AIManagerTempBox:SetText(string.format("%.2f", currentConfig.temperature));
+    end
+    if currentConfig.repetition_penalty then 
+        AIManagerRepPenSlider:SetValue(currentConfig.repetition_penalty);
+        AIManagerRepPenBox:SetText(string.format("%.2f", currentConfig.repetition_penalty));
+    end
+    if currentConfig.top_p then 
+        AIManagerTopPSlider:SetValue(currentConfig.top_p);
+        AIManagerTopPBox:SetText(string.format("%.2f", currentConfig.top_p));
+    end
+    if currentConfig.top_k then 
+        AIManagerTopKSlider:SetValue(currentConfig.top_k);
+        AIManagerTopKBox:SetText(currentConfig.top_k);
     end
 end
 
@@ -159,4 +198,18 @@ function AIManager_SetConnectionStatus(isConnected)
         AIManagerStatusIndicatorCircle:SetVertexColor(0.9, 0.1, 0.1); -- Red
         AIManagerStatusIndicatorText:SetText("No Connection");
     end
+end
+
+-- Helper function to sync a slider and an editbox
+function AIManager_LinkSliderToEditBox(slider, editbox, format)
+    slider:SetScript("OnValueChanged", function(self, value)
+        editbox:SetText(string.format(format, value));
+    end)
+    editbox:SetScript("OnEnterPressed", function(self)
+        local value = tonumber(self:GetText());
+        if value then
+            slider:SetValue(value);
+        end
+        self:ClearFocus();
+    end)
 end
