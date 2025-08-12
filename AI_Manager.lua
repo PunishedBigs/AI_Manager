@@ -1,93 +1,114 @@
 -- ===================================================================
--- FILE: AI_Manager.lua (with Chunking for large data)
+-- FILE: AI_Manager.lua (Hybrid Config Model)
 -- ===================================================================
 local addonName, addonTable = ...;
 
-local pages = {};
-local menuButtons = {};
-local selectedButton = nil;
-local isInitialized = false;
-local currentConfig = {};
-local messageQueue = {};
+-- This table will be saved in the WTF folder by the WoW client.
+AIManagerDB = nil; 
 
--- C++ Default values for the new Restore Defaults feature
-local defaultSettings = {
-    Format = {
-        system_prompt = "You are a helpful AI assistant roleplaying as a character in the World of Warcraft.\nFollow these rules strictly:\n1. Always stay in character.\n2. Do not use newline characters in your response.\n3. Keep your responses to a single, concise paragraph.\n4. Never speak for the player.",
-        system_tag = "{{{SYSTEM}}}",
-        user_tag = "{{{INPUT}}}",
-        assistant_tag = "{{{OUTPUT}}}",
-    },
-    Samplers = {
+-- Default settings for first-time users or for resetting.
+local defaults = {
+    samplers = {
         max_context_length = 8192,
         max_length = 128,
         temperature = 0.8,
         repetition_penalty = 1.1,
         top_p = 0.9,
         top_k = 40,
-    }
+    },
+    format = {
+        system_prompt = "You are a helpful AI assistant roleplaying as a character in the World of Warcraft.\nFollow these rules strictly:\n1. Always stay in character.\n2. Do not use newline characters in your response.\n3. Keep your responses to a single, concise paragraph.\n4. Never speak for the player.",
+        system_tag = "{{{SYSTEM}}}",
+        user_tag = "{{{INPUT}}}",
+        assistant_tag = "{{{OUTPUT}}}",
+    },
+    player_card = {
+        name = "",
+        description = "",
+    },
+    -- Using an indexed table of character objects, each with a unique ID.
+    character_cards = {}, 
+    nextCharacterId = 1,
 }
 
--- ===================================================================
--- OnUpdate Frame for Safe Message Processing
--- ===================================================================
-local updateFrame = CreateFrame("Frame", "AIManagerUpdateFrame")
-updateFrame:SetScript("OnUpdate", function(self, elapsed)
-    if #messageQueue > 0 then
-        local msg = table.remove(messageQueue, 1);
-        -- Extract the command and content safely
-        local command, content = string.match(msg, "%[AIMgr_([A-Z]+)%](.+)");
-        if command == "STATUS" then
-            local _, _, statusValue = string.find(content, "status=(.+)");
-            if statusValue then AIManager_ParseStatus(statusValue) end
-        elseif command == "CONFIG" then
-            AIManager_ParseConfig(content)
-        end
-    end
-end)
+-- Conversation state (cleared on target change or reload)
+local conversationHistory = {};
+local currentTargetGUID = nil;
+local messageQueue = {};
+local isInitialized = false;
+local characterCardFrames = {}; -- To keep track of dynamically created frames
 
 -- ===================================================================
--- Main Addon Functions
+-- Initialization & Event Handling
+-- ===================================================================
+local frame = CreateFrame("Frame", "AIManagerEventHandler");
+frame:RegisterEvent("ADDON_LOADED");
+frame:RegisterEvent("PLAYER_LOGIN");
+frame:RegisterEvent("PLAYER_TARGET_CHANGED");
+frame:RegisterEvent("PLAYER_LOGOUT");
+
+frame:SetScript("OnEvent", function(self, event, ...)
+    if event == "ADDON_LOADED" and ... == addonName then
+        AIManagerDB = AIManagerDB or CopyTable(defaults);
+        
+        -- Data migration for users from older versions
+        if not AIManagerDB.nextCharacterId then
+            print("|cff3399ffAI Manager:|r Migrating old character data format...");
+            local newCards = {}
+            local idCounter = 1
+            for name, desc in pairs(AIManagerDB.character_cards) do
+                table.insert(newCards, { id = idCounter, name = name, description = desc })
+                idCounter = idCounter + 1
+            end
+            AIManagerDB.character_cards = newCards
+            AIManagerDB.nextCharacterId = idCounter
+        end
+        if not AIManagerDB.player_card then
+            AIManagerDB.player_card = CopyTable(defaults.player_card);
+            AIManagerDB.player_card.name = UnitName("player");
+        end
+
+        print("|cff3399ffAI Manager:|r AddOn Loaded. Use /aim to open.");
+    
+    elseif event == "PLAYER_LOGIN" then
+        AIManager_RequestConfig();
+        AIManager_RequestStatus();
+
+    elseif event == "PLAYER_TARGET_CHANGED" or (event == "PLAYER_LOGOUT" and currentTargetGUID) then
+        conversationHistory = {};
+        currentTargetGUID = nil;
+    end
+end);
+
+-- ===================================================================
+-- Main Addon UI Functions
 -- ===================================================================
 function AIManager_OnLoad(self)
     self:RegisterForDrag("LeftButton");
     ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", AIManager_ChatFilter);
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_SAY", AIManager_ChatSayFilter);
 
-    -- Link sliders to their edit boxes
     AIManager_LinkSliderToEditBox(AIManagerContextSizeSlider, AIManagerContextSizeBox, "%d");
     AIManager_LinkSliderToEditBox(AIManagerMaxLengthSlider, AIManagerMaxLengthBox, "%d");
     AIManager_LinkSliderToEditBox(AIManagerTempSlider, AIManagerTempBox, "%.2f");
     AIManager_LinkSliderToEditBox(AIManagerRepPenSlider, AIManagerRepPenBox, "%.2f");
     AIManager_LinkSliderToEditBox(AIManagerTopPSlider, AIManagerTopPBox, "%.2f");
     AIManager_LinkSliderToEditBox(AIManagerTopKSlider, AIManagerTopKBox, "%d");
-
-    print("|cff3399ffAI Manager:|r AddOn Loaded.");
 end
 
 function AIManager_OnShow()
     if not isInitialized then
-        pages["Network"] = AIManagerNetworkPage;
-        pages["Format"] = AIManagerFormatPage;
-        pages["Samplers"] = AIManagerSamplersPage;
-        pages["Characters"] = AIManagerCharactersPage;
-
-        menuButtons = { AIManagerMenuButton1, AIManagerMenuButton2, AIManagerMenuButton3, AIManagerMenuButton4 };
-
         AIManagerMenuButton1.pageName = "Network";
         AIManagerMenuButton2.pageName = "Format";
         AIManagerMenuButton3.pageName = "Samplers";
         AIManagerMenuButton4.pageName = "Characters";
-        
         isInitialized = true;
     end
 
+    AIManager_PopulateUI();
     AIManager_RequestConfig();
     AIManager_ShowPage("Network");
     AIManager_HighlightButton(AIManagerMenuButton1);
-end
-
-function AIManager_OnHide()
-    -- Optional: Add any cleanup logic needed when the window is hidden
 end
 
 SLASH_AIMANAGER1 = "/aimanager";
@@ -96,284 +117,266 @@ function SlashCmdList.AIMANAGER(msg, editbox)
     if AIManagerFrame:IsShown() then AIManagerFrame:Hide() else AIManagerFrame:Show() end
 end
 
-function AIManager_MenuButton_OnClick(button)
-    if button.pageName then
-        AIManager_ShowPage(button.pageName);
-        AIManager_HighlightButton(button);
-    end
-end
+-- ===================================================================
+-- Data Handling & Communication
+-- ===================================================================
 
-function AIManager_ShowPage(pageName)
-    for name, frame in pairs(pages) do frame:Hide() end
-    if pages[pageName] then
-        pages[pageName]:Show();
-        if pageName == "Characters" then
-            AIManager_UpdatePlayerCard();
+-- Helper to find a character card by name
+function AIManager_GetCharacterCardByName(name)
+    for _, card in ipairs(AIManagerDB.character_cards) do
+        if card.name == name then
+            return card;
         end
     end
+    return nil;
 end
 
-function AIManager_HighlightButton(buttonToHighlight)
-    for i, button in ipairs(menuButtons) do
-        local text = button:GetFontString();
-        if text then
-            if button == buttonToHighlight then
-                text:SetTextColor(1.0, 1.0, 1.0); -- White
-            else
-                text:SetTextColor(1.0, 0.82, 0.0); -- Yellow
-            end
-        end
-    end
-    selectedButton = buttonToHighlight;
-end
-
--- ===================================================================
--- Data Handling and Communication
--- ===================================================================
 function AIManager_RequestConfig()
-    SendAddonMessage("AIMGR", "GET_CONFIG", "GUILD");
+    SendChatMessage("AIMGR GET_CONFIG", "SAY");
 end
 
-function AIManager_SaveChanges()
-    local dataString = "";
-    
-    -- This function now saves settings for whichever page is currently visible
-    if AIManagerFormatPage:IsShown() or AIManagerSamplersPage:IsShown() or AIManagerNetworkPage:IsShown() then
-        dataString = "host=" .. AIManagerNetworkIPBox:GetText() .. ";" ..
-                     "port=" .. AIManagerNetworkPortBox:GetText() .. ";" ..
-                     "max_context_length=" .. AIManagerContextSizeBox:GetText() .. ";" ..
-                     "max_length=" .. AIManagerMaxLengthBox:GetText() .. ";" ..
-                     "temperature=" .. AIManagerTempBox:GetText() .. ";" ..
-                     "repetition_penalty=" .. AIManagerRepPenBox:GetText() .. ";" ..
-                     "top_p=" .. AIManagerTopPBox:GetText() .. ";" ..
-                     "top_k=" .. AIManagerTopKBox:GetText() .. ";";
+function AIManager_RequestStatus()
+    SendChatMessage("AIMGR GET_STATUS", "SAY");
+    print("|cff3399ffAI Manager:|r Refreshing connection status...");
+end
+
+function AIManager_ChatSayFilter(self, event, msg, ...)
+    if string.find(msg, "AIMGR", 1, true) then return false end
+
+    local target = "target";
+    if UnitExists(target) and not UnitIsPlayer(target) and UnitCanCooperate("player", target) then
+        local npcName = UnitName(target);
+        local npcGUID = UnitGUID(target);
+
+        if npcGUID ~= currentTargetGUID then
+            conversationHistory = {};
+            currentTargetGUID = npcGUID;
+        end
+
+        local playerCard = "Name: " .. AIManagerDB.player_card.name .. "\nDescription: " .. AIManagerDB.player_card.description;
+        local npcCardData = AIManager_GetCharacterCardByName(npcName);
+        local npcCard = npcCardData and npcCardData.description or "";
         
-        local prompt = AIManagerSysPromptBox:GetText();
-        prompt = string.gsub(prompt, "\n", "##NL##");
-        dataString = dataString .. "system_prompt=" .. prompt .. ";" ..
-                     "system_tag=" .. AIManagerSystemTagBox:GetText() .. ";" ..
-                     "user_tag=" .. AIManagerUserTagBox:GetText() .. ";" ..
-                     "assistant_tag=" .. AIManagerAssistantTagBox:GetText() .. ";";
+        local prompt = AIManagerDB.format.system_prompt .. "\n" .. playerCard .. "\n" .. npcCard .. table.concat(conversationHistory, "") .. "\nPlayer: " .. msg .. "\n" .. npcName .. ":";
+        table.insert(conversationHistory, "\nPlayer: " .. msg);
+
+        local samplerString = ""
+        for k, v in pairs(AIManagerDB.samplers) do
+            samplerString = samplerString .. "\"" .. k .. "\":" .. tostring(v) .. ","
+        end
+        samplerString = "{" .. string.sub(samplerString, 1, -2) .. "}";
+
+        local safe_prompt = string.gsub(prompt, ";", "##SC##");
+        safe_prompt = string.gsub(safe_prompt, "\n", "##NL##");
+        
+        local dataString = safe_prompt .. ";" .. samplerString;
 
         local chunkSize = 200;
-        SendAddonMessage("AIMGR", "SAVE_CONFIG_START", "GUILD");
+        SendChatMessage("AIMGR PROMPT_START", "SAY");
         for i = 1, math.ceil(string.len(dataString) / chunkSize) do
             local chunk = string.sub(dataString, (i - 1) * chunkSize + 1, i * chunkSize);
-            SendAddonMessage("AIMGR", "SAVE_CONFIG_CHUNK " .. chunk, "GUILD");
+            SendChatMessage("AIMGR PROMPT_CHUNK " .. chunk, "SAY");
         end
-        SendAddonMessage("AIMGR", "SAVE_CONFIG_END", "GUILD");
-
-    elseif AIManagerCharactersPage:IsShown() then
-        local playerName = AIManagerPlayerNameBox:GetText();
-        local playerCard = AIManagerPlayerDescBox:GetText();
-        
-        playerCard = string.gsub(playerCard, "\n", "##NL##");
-        playerCard = string.gsub(playerCard, ";", "##SC##");
-        playerCard = string.gsub(playerCard, "=", "##EQ##");
-        
-        local payload = playerName .. ";" .. playerCard;
-        SendAddonMessage("AIMGR", "SAVE_PLAYER_CARD " .. payload, "GUILD");
+        SendChatMessage("AIMGR PROMPT_END", "SAY");
     end
+    return false;
 end
 
 function AIManager_ChatFilter(self, event, msg, ...)
-    if string.find(msg, "[AIMgr_STATUS]", 1, true) or string.find(msg, "[AIMgr_CONFIG]", 1, true) then
+    if string.find(msg, "[AIMgr_STATUS]", 1, true) or string.find(msg, "[AIMgr_RESPONSE]", 1, true) or string.find(msg, "[AIMgr_CONFIG]", 1, true) then
         table.insert(messageQueue, msg);
         return true;
     end
     return false;
 end
 
-function AIManager_ParseStatus(statusStr)
-    local isConnected = (statusStr == "true");
-    AIManager_SetConnectionStatus(isConnected);
-end
+local updateFrame = CreateFrame("Frame", "AIManagerUpdateFrame")
+updateFrame:SetScript("OnUpdate", function(self, elapsed)
+    if #messageQueue > 0 then
+        local msg = table.remove(messageQueue, 1);
+        if string.find(msg, "[AIMgr_CONFIG]", 1, true) then
+            local _, _, configData = string.find(msg, "%[AIMgr_CONFIG%](.+)");
+            local host, port = string.match(configData, "host=([^;]+);port=([^;]+);");
+            if host and port then
+                AIManagerNetworkIPBox:SetText(host);
+                AIManagerNetworkPortBox:SetText(port);
+            end
+        elseif string.find(msg, "[AIMgr_STATUS]", 1, true) then
+            local _, _, statusValue = string.find(msg, "status=(.+)");
+            if statusValue then AIManager_SetConnectionStatus(statusValue == "true") end
+        elseif string.find(msg, "[AIMgr_RESPONSE]", 1, true) then
+            local _, _, responseText = string.find(msg, "%[AIMgr_RESPONSE%](.+)");
+            if responseText and currentTargetGUID then
+                 table.insert(conversationHistory, " " .. responseText);
+            end
+        end
+    end
+end)
 
-function AIManager_ParseConfig(configStr)
-    currentConfig = { playerCards = {} }; -- Fully reset the config table
+function AIManager_SaveChanges()
+    if AIManagerNetworkPage:IsShown() then
+        local host = AIManagerNetworkIPBox:GetText();
+        local port = AIManagerNetworkPortBox:GetText();
+        SendChatMessage("AIMGR SAVE_NETWORK_CONFIG " .. host .. " " .. port, "SAY");
+        print("|cff3399ffAI Manager:|r Network settings sent to server.");
+    end
 
-    local remaining_str = configStr
-    while string.len(remaining_str) > 0 do
-        local end_pos = string.find(remaining_str, ";", 1, true)
-        if not end_pos then break end -- No more pairs
+    AIManagerDB.samplers.max_context_length = AIManagerContextSizeSlider:GetValue();
+    AIManagerDB.samplers.max_length = AIManagerMaxLengthSlider:GetValue();
+    AIManagerDB.samplers.temperature = AIManagerTempSlider:GetValue();
+    AIManagerDB.samplers.repetition_penalty = AIManagerRepPenSlider:GetValue();
+    AIManagerDB.samplers.top_p = AIManagerTopPSlider:GetValue();
+    AIManagerDB.samplers.top_k = AIManagerTopKSlider:GetValue();
+    AIManagerDB.format.system_prompt = AIManagerSysPromptBox:GetText();
+    AIManagerDB.format.system_tag = AIManagerSystemTagBox:GetText();
+    AIManagerDB.format.user_tag = AIManagerUserTagBox:GetText();
+    AIManagerDB.format.assistant_tag = AIManagerAssistantTagBox:GetText();
+    
+    AIManagerDB.player_card.name = AIManagerPlayerNameBox:GetText();
+    AIManagerDB.player_card.description = AIManagerPlayerDescBox:GetText();
 
-        local pair_str = string.sub(remaining_str, 1, end_pos - 1)
-        remaining_str = string.sub(remaining_str, end_pos + 1)
-
-        local eq_pos = string.find(pair_str, "=", 1, true)
-        if eq_pos then
-            local key = string.sub(pair_str, 1, eq_pos - 1)
-            local value = string.sub(pair_str, eq_pos + 1)
-
-            -- Process key-value pair
-            if key == "port" or key == "max_context_length" or key == "max_length" or key == "top_k" then
-                currentConfig[key] = tonumber(value);
-            elseif key == "temperature" or key == "repetition_penalty" or key == "top_p" then
-                currentConfig[key] = tonumber(value);
-            elseif key == "system_prompt" then
-                value = string.gsub(value, "##NL##", "\n");
-                currentConfig[key] = value;
-            elseif key == "player_cards" then
-                if value and value ~= "" then
-                    local temp_value = value
-                    while true do
-                        local pc_pos = string.find(temp_value, "##PC##", 1, true)
-                        local card_str_part
-                        if pc_pos then
-                            card_str_part = string.sub(temp_value, 1, pc_pos - 1)
-                            temp_value = string.sub(temp_value, pc_pos + #("##PC##"))
-                        else
-                            card_str_part = temp_value
-                            temp_value = ""
-                        end
-
-                        local inner_eq_pos = string.find(card_str_part, "##EQ##", 1, true)
-                        if inner_eq_pos then
-                            local name = string.sub(card_str_part, 1, inner_eq_pos - 1)
-                            local card = string.sub(card_str_part, inner_eq_pos + #("##EQ##"))
-                            
-                            card = string.gsub(card, "##NL##", "\n");
-                            card = string.gsub(card, "##SC##", ";");
-                            card = string.gsub(card, "##EQ##", "=");
-                            currentConfig.playerCards[name] = card;
-                        end
-                        
-                        if temp_value == "" then break end
-                    end
-                end
-            else
-                currentConfig[key] = value;
+    -- Save NPC Cards by updating them based on their ID
+    for _, frame in ipairs(characterCardFrames) do
+        local cardId = frame.characterId;
+        for i, card in ipairs(AIManagerDB.character_cards) do
+            if card.id == cardId then
+                card.name = _G[frame:GetName() .. "NameBox"]:GetText();
+                card.description = _G[frame:GetName() .. "DescBox"]:GetText();
+                break; -- Found the card, no need to keep looping
             end
         end
     end
     
-    AIManager_PopulateUI();
+    print("|cff3399ffAI Manager:|r Local settings saved.");
+    AIManager_UpdateCharacterCards();
 end
-
 
 function AIManager_PopulateUI()
-    -- Network Page
-    if currentConfig.host then AIManagerNetworkIPBox:SetText(currentConfig.host) end
-    if currentConfig.port then AIManagerNetworkPortBox:SetText(currentConfig.port) end
-
-    -- Samplers Page
-    if currentConfig.max_context_length then 
-        AIManagerContextSizeSlider:SetValue(currentConfig.max_context_length);
-        AIManagerContextSizeBox:SetText(currentConfig.max_context_length);
-    end
-    if currentConfig.max_length then 
-        AIManagerMaxLengthSlider:SetValue(currentConfig.max_length);
-        AIManagerMaxLengthBox:SetText(currentConfig.max_length);
-    end
-    if currentConfig.temperature then 
-        AIManagerTempSlider:SetValue(currentConfig.temperature);
-        AIManagerTempBox:SetText(string.format("%.2f", currentConfig.temperature));
-    end
-    if currentConfig.repetition_penalty then 
-        AIManagerRepPenSlider:SetValue(currentConfig.repetition_penalty);
-        AIManagerRepPenBox:SetText(string.format("%.2f", currentConfig.repetition_penalty));
-    end
-    if currentConfig.top_p then 
-        AIManagerTopPSlider:SetValue(currentConfig.top_p);
-        AIManagerTopPBox:SetText(string.format("%.2f", currentConfig.top_p));
-    end
-    if currentConfig.top_k then 
-        AIManagerTopKSlider:SetValue(currentConfig.top_k);
-        AIManagerTopKBox:SetText(currentConfig.top_k);
-    end
-
-    -- Format Page
-    if currentConfig.system_prompt then AIManagerSysPromptBox:SetText(currentConfig.system_prompt) end
-    if currentConfig.system_tag then AIManagerSystemTagBox:SetText(currentConfig.system_tag) end
-    if currentConfig.user_tag then AIManagerUserTagBox:SetText(currentConfig.user_tag) end
-    if currentConfig.assistant_tag then AIManagerAssistantTagBox:SetText(currentConfig.assistant_tag) end
-
-    -- Characters Page (this will be populated when the page is shown)
-    AIManager_UpdatePlayerCard();
+    if not AIManagerDB then return end
+    AIManagerContextSizeSlider:SetValue(AIManagerDB.samplers.max_context_length);
+    AIManagerMaxLengthSlider:SetValue(AIManagerDB.samplers.max_length);
+    AIManagerTempSlider:SetValue(AIManagerDB.samplers.temperature);
+    AIManagerRepPenSlider:SetValue(AIManagerDB.samplers.repetition_penalty);
+    AIManagerTopPSlider:SetValue(AIManagerDB.samplers.top_p);
+    AIManagerTopKSlider:SetValue(AIManagerDB.samplers.top_k);
+    AIManagerSysPromptBox:SetText(AIManagerDB.format.system_prompt);
+    AIManagerSystemTagBox:SetText(AIManagerDB.format.system_tag);
+    AIManagerUserTagBox:SetText(AIManagerDB.format.user_tag);
+    AIManagerAssistantTagBox:SetText(AIManagerDB.format.assistant_tag);
+    AIManager_UpdateCharacterCards();
 end
 
-function AIManager_UpdatePlayerCard()
-    -- Set Player Portrait for the current player
+-- ===================================================================
+-- Character Page Functions
+-- ===================================================================
+
+function AIManager_AddCharacterCard()
+    local newId = AIManagerDB.nextCharacterId;
+    local newCard = {
+        id = newId,
+        name = "NewCharacter" .. newId,
+        description = "",
+    }
+    table.insert(AIManagerDB.character_cards, newCard);
+    AIManagerDB.nextCharacterId = newId + 1;
+    AIManager_UpdateCharacterCards();
+end
+
+function AIManager_UpdateCharacterCards()
+    -- Hide and clear all existing card frames before redrawing
+    for _, frame in ipairs(characterCardFrames) do
+        frame:Hide();
+    end
+    characterCardFrames = {};
+
+    -- Populate the player card
+    AIManagerPlayerNameBox:SetText(AIManagerDB.player_card.name or UnitName("player"));
+    AIManagerPlayerDescBox:SetText(AIManagerDB.player_card.description or "");
     SetPortraitTexture(AIManagerPlayerPortraitTexture, "player");
     
-    local playerName = UnitName("player");
-    AIManagerPlayerNameBox:SetText(playerName);
-    
-    -- Find the current player's card and populate the description
-    if currentConfig.playerCards and currentConfig.playerCards[playerName] then
-        AIManagerPlayerDescBox:SetText(currentConfig.playerCards[playerName]);
-    else
-        AIManagerPlayerDescBox:SetText(""); -- Clear description if no card exists
+    local lastAnchor = AIManagerPlayerCardFrame;
+
+    -- Create and populate a frame for each NPC character card
+    for _, cardData in ipairs(AIManagerDB.character_cards) do
+        local cardFrame = CreateFrame("Frame", "AIManagerNPC_Card" .. cardData.id, AIManagerCharactersPage, "AIManagerCharacterCardTemplate");
+        cardFrame:SetPoint("TOP", lastAnchor, "BOTTOM", 0, -20);
+        
+        cardFrame.characterId = cardData.id;
+        
+        _G[cardFrame:GetName() .. "NameBox"]:SetText(cardData.name);
+        _G[cardFrame:GetName() .. "DescBox"]:SetText(cardData.description);
+        _G[cardFrame:GetName() .. "PortraitTexture"]:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark");
+        
+        table.insert(characterCardFrames, cardFrame);
+        lastAnchor = cardFrame;
+        cardFrame:Show();
     end
+    
+    -- Anchor the "Add Character" button below the last card
+    AIManagerAddCharacterButton:SetPoint("TOP", lastAnchor, "BOTTOM", 0, -20);
 end
+
 
 function AIManager_SetConnectionStatus(isConnected)
     AIManagerStatusIndicator:Show();
     if isConnected then
-        AIManagerStatusIndicatorCircle:SetVertexColor(0.1, 0.9, 0.1); -- Green
+        AIManagerStatusIndicatorCircle:SetVertexColor(0.1, 0.9, 0.1);
         AIManagerStatusIndicatorText:SetText("Connected");
     else
-        AIManagerStatusIndicatorCircle:SetVertexColor(0.9, 0.1, 0.1); -- Red
+        AIManagerStatusIndicatorCircle:SetVertexColor(0.9, 0.1, 0.1);
         AIManagerStatusIndicatorText:SetText("No Connection");
     end
 end
 
--- Helper function to sync a slider and an editbox
 function AIManager_LinkSliderToEditBox(slider, editbox, format)
-    slider:SetScript("OnValueChanged", function(self, value)
-        editbox:SetText(string.format(format, value));
-    end)
-    editbox:SetScript("OnEnterPressed", function(self)
-        local value = tonumber(self:GetText());
-        if value then
-            slider:SetValue(value);
-        end
-        self:ClearFocus();
-    end)
+    slider:SetScript("OnValueChanged", function(self, value) editbox:SetText(string.format(format, value)) end);
+    editbox:SetScript("OnEnterPressed", function(self) slider:SetValue(tonumber(self:GetText()) or 0); self:ClearFocus() end);
 end
 
 -- ===================================================================
--- Restore Defaults Feature
+-- Page Switching & Highlighting
 -- ===================================================================
-StaticPopupDialogs["AIMANAGER_RESTORE_DEFAULTS"] = {
-    text = "Are you sure you want to restore the default settings for this page? This action cannot be undone.",
-    button1 = "Accept",
-    button2 = "Cancel",
-    OnAccept = function(self, data)
-        AIManager_RestoreDefaults(data);
-    end,
-    timeout = 0,
-    whileDead = 1,
-    hideOnEscape = 1,
-    preferredIndex = 3,
-};
+function AIManager_MenuButton_OnClick(button)
+    if button.pageName then
+        AIManager_HighlightButton(button);
+        AIManager_ShowPage(button.pageName);
+    end
+end
 
+function AIManager_ShowPage(pageName)
+    local pages = {Network=AIManagerNetworkPage, Format=AIManagerFormatPage, Samplers=AIManagerSamplersPage, Characters=AIManagerCharactersPage};
+    for name, frame in pairs(pages) do frame:Hide() end
+    if pages[pageName] then pages[pageName]:Show() end
+    if pageName == "Characters" then 
+        AIManager_UpdateCharacterCards();
+    end
+end
+
+function AIManager_HighlightButton(buttonToHighlight)
+    local menuButtons = {AIManagerMenuButton1, AIManagerMenuButton2, AIManagerMenuButton3, AIManagerMenuButton4};
+    for _, button in ipairs(menuButtons) do
+        if button == buttonToHighlight then
+            button:GetFontString():SetTextColor(1, 1, 1)
+        else
+            button:GetFontString():SetTextColor(1, 0.82, 0)
+        end
+    end
+end
+
+-- ===================================================================
+-- Restore & Delete Defaults Feature
+-- ===================================================================
 function AIManager_ShowRestoreDefaultsConfirmation(pageName)
-    StaticPopup_Show("AIMANAGER_RESTORE_DEFAULTS", nil, nil, pageName);
+    -- This would need a custom dialog as well, if we want to keep it.
 end
 
 function AIManager_RestoreDefaults(pageName)
     if pageName == "Format" then
-        local defaults = defaultSettings.Format;
-        AIManagerSysPromptBox:SetText(defaults.system_prompt);
-        AIManagerSystemTagBox:SetText(defaults.system_tag);
-        AIManagerUserTagBox:SetText(defaults.user_tag);
-        AIManagerAssistantTagBox:SetText(defaults.assistant_tag);
+        AIManagerDB.format = CopyTable(defaults.format);
     elseif pageName == "Samplers" then
-        local defaults = defaultSettings.Samplers;
-        AIManagerContextSizeSlider:SetValue(defaults.max_context_length);
-        AIManagerContextSizeBox:SetText(defaults.max_context_length);
-        AIManagerMaxLengthSlider:SetValue(defaults.max_length);
-        AIManagerMaxLengthBox:SetText(defaults.max_length);
-        AIManagerTempSlider:SetValue(defaults.temperature);
-        AIManagerTempBox:SetText(string.format("%.2f", defaults.temperature));
-        AIManagerRepPenSlider:SetValue(defaults.repetition_penalty);
-        AIManagerRepPenBox:SetText(string.format("%.2f", defaults.repetition_penalty));
-        AIManagerTopPSlider:SetValue(defaults.top_p);
-        AIManagerTopPBox:SetText(string.format("%.2f", defaults.top_p));
-        AIManagerTopKSlider:SetValue(defaults.top_k);
-        AIManagerTopKBox:SetText(defaults.top_k);
+        AIManagerDB.samplers = CopyTable(defaults.samplers);
     end
-    -- BUGFIX: Immediately save the changes after restoring them in the UI.
-    AIManager_SaveChanges();
+    
+    AIManager_PopulateUI();
+    print("|cff3399ffAI Manager:|r " .. pageName .. " settings restored to default.");
 end

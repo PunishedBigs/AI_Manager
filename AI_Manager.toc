@@ -9,6 +9,7 @@
 ## Author: You
 ## Version: 1.0
 ## SlashCmds: /aim, /aimanager
+## SavedVariables: AIManagerDB
 
 AI_Manager.xml
 AI_Manager.lua
