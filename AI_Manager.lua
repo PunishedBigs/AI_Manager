@@ -29,6 +29,8 @@ local defaults = {
     -- Using an indexed table of character objects, each with a unique ID.
     character_cards = {}, 
     nextCharacterId = 1,
+    -- ADDED: Table to store log data for writing to file
+    log = {}
 }
 
 -- Conversation state (cleared on target change or reload)
@@ -37,6 +39,15 @@ local currentTargetGUID = nil;
 local messageQueue = {};
 local isInitialized = false;
 local characterCardFrames = {}; -- To keep track of dynamically created frames
+
+-- ===================================================================
+-- Debug Logging System
+-- ===================================================================
+local function AIManager_Log(message)
+    -- Add a timestamp and the message to our log table.
+    -- This table is saved to the WTF folder on logout/reload.
+    table.insert(AIManagerDB.log, date("[%H:%M:%S] ") .. message);
+end
 
 -- ===================================================================
 -- Initialization & Event Handling
@@ -50,10 +61,12 @@ frame:RegisterEvent("PLAYER_LOGOUT");
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" and ... == addonName then
         AIManagerDB = AIManagerDB or CopyTable(defaults);
+        -- Ensure the log table exists for users updating the addon
+        AIManagerDB.log = AIManagerDB.log or {};
         
         -- Data migration for users from older versions
         if not AIManagerDB.nextCharacterId then
-            print("|cff3399ffAI Manager:|r Migrating old character data format...");
+            AIManager_Log("Migrating old character data format...");
             local newCards = {}
             local idCounter = 1
             for name, desc in pairs(AIManagerDB.character_cards) do
@@ -68,7 +81,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
             AIManagerDB.player_card.name = UnitName("player");
         end
 
-        print("|cff3399ffAI Manager:|r AddOn Loaded. Use /aim to open.");
+        print("|cff3399ffAI Manager:|r AddOn Loaded. Use /aim to open. Use /aimlog for debug info.");
     
     elseif event == "PLAYER_LOGIN" then
         AIManager_RequestConfig();
@@ -114,7 +127,24 @@ end
 SLASH_AIMANAGER1 = "/aimanager";
 SLASH_AIMANAGER2 = "/aim";
 function SlashCmdList.AIMANAGER(msg, editbox)
-    if AIManagerFrame:IsShown() then AIManagerFrame:Hide() else AIManagerFrame:Show() end
+    if msg == "log" then
+        -- Redirecting to the new handler for clarity
+        SlashCmdList.AIMLOG("");
+    else
+        if AIManagerFrame:IsShown() then AIManagerFrame:Hide() else AIManagerFrame:Show() end
+    end
+end
+
+-- New slash command for logging
+SLASH_AIMLOG1 = "/aimlog";
+function SlashCmdList.AIMLOG(msg, editbox)
+    if msg == "clear" then
+        AIManagerDB.log = {};
+        print("|cff3399ffAI Manager:|r Debug log has been cleared.");
+    else
+        print("|cff3399ffAI Manager:|r Your debug log file can be found at:");
+        print("|cffffd100World of Warcraft/_classic_/WTF/Account/<ACCOUNT_NAME>/SavedVariables/AI_Manager.lua|r");
+    end
 end
 
 -- ===================================================================
@@ -247,7 +277,7 @@ function AIManager_SaveChanges()
         end
     end
     
-    print("|cff3399ffAI Manager:|r Local settings saved.");
+    AIManager_Log("Local settings saved.");
     AIManager_UpdateCharacterCards();
 end
 
@@ -267,10 +297,11 @@ function AIManager_PopulateUI()
 end
 
 -- ===================================================================
--- Character Page Functions
+-- Character Page Functions (REWRITTEN FOR STABILITY)
 -- ===================================================================
 
 function AIManager_AddCharacterCard()
+    AIManager_Log("AddCharacterCard: Adding new card to DB.")
     local newId = AIManagerDB.nextCharacterId;
     local newCard = {
         id = newId,
@@ -279,41 +310,88 @@ function AIManager_AddCharacterCard()
     }
     table.insert(AIManagerDB.character_cards, newCard);
     AIManagerDB.nextCharacterId = newId + 1;
+    
+    -- After adding, just call the full UI rebuild
     AIManager_UpdateCharacterCards();
 end
 
-function AIManager_UpdateCharacterCards()
-    -- Hide and clear all existing card frames before redrawing
-    for _, frame in ipairs(characterCardFrames) do
-        frame:Hide();
+function AIManager_DeleteCharacterCard(button)
+    AIManager_Log("DeleteCharacterCard: Initiating delete.")
+    local frame = button:GetParent();
+    
+    -- "Fake it" by hiding the frame immediately for instant visual feedback
+    AIManager_Log("Hiding frame '" .. frame:GetName() .. "' immediately.")
+    frame:Hide()
+    
+    local cardId = frame.characterId;
+    
+    local cardIndex;
+    -- Find the card in the database to remove it
+    for i, card in ipairs(AIManagerDB.character_cards) do
+        if card.id == cardId then
+            cardIndex = i;
+            break;
+        end
     end
-    characterCardFrames = {};
 
-    -- Populate the player card
+    if cardIndex then
+        AIManager_Log("DeleteCharacterCard: Found card in DB at index " .. cardIndex .. ". Removing.")
+        table.remove(AIManagerDB.character_cards, cardIndex)
+        
+        -- After deleting data, call the full UI rebuild which will now exclude the deleted card.
+        AIManager_Log("Calling full UI rebuild to finalize deletion.")
+        AIManager_UpdateCharacterCards();
+    else
+        AIManager_Log("DeleteCharacterCard: ERROR! Could not find card with ID " .. tostring(cardId) .. " in the database.")
+    end
+end
+
+-- This is now the single, reliable function for drawing the character list.
+-- It will always destroy all old frames and rebuild from the database.
+function AIManager_UpdateCharacterCards()
+    AIManager_Log("\n--- UpdateCharacterCards (Full Rebuild) ---")
+    AIManager_Log("Destroying " .. #characterCardFrames .. " old frames.")
+
+    -- This loop now correctly destroys all previously created card frames.
+    for _, frame in ipairs(characterCardFrames) do
+        frame:SetParent(nil) 
+    end
+    -- We now correctly reset the table AFTER destroying the old frames.
+    characterCardFrames = {} 
+
+    AIManager_Log("Old frames destroyed. Rebuilding from " .. #AIManagerDB.character_cards .. " cards in DB.")
+
+    -- Populate the player card (this is static and doesn't need to be rebuilt)
     AIManagerPlayerNameBox:SetText(AIManagerDB.player_card.name or UnitName("player"));
     AIManagerPlayerDescBox:SetText(AIManagerDB.player_card.description or "");
     SetPortraitTexture(AIManagerPlayerPortraitTexture, "player");
     
     local lastAnchor = AIManagerPlayerCardFrame;
 
-    -- Create and populate a frame for each NPC character card
-    for _, cardData in ipairs(AIManagerDB.character_cards) do
-        local cardFrame = CreateFrame("Frame", "AIManagerNPC_Card" .. cardData.id, AIManagerCharactersPage, "AIManagerCharacterCardTemplate");
-        cardFrame:SetPoint("TOP", lastAnchor, "BOTTOM", 0, -20);
+    -- Re-create a frame for each character card currently in the database
+    for i, cardData in ipairs(AIManagerDB.character_cards) do
+        local newFrameName = "AIManagerNPC_Card" .. cardData.id
+        local cardFrame = CreateFrame("Frame", newFrameName, AIManagerCharactersPage, "AIManagerCharacterCardTemplate");
         
+        cardFrame:SetPoint("TOP", lastAnchor, "BOTTOM", 0, -20);
         cardFrame.characterId = cardData.id;
         
-        _G[cardFrame:GetName() .. "NameBox"]:SetText(cardData.name);
-        _G[cardFrame:GetName() .. "DescBox"]:SetText(cardData.description);
-        _G[cardFrame:GetName() .. "PortraitTexture"]:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark");
+        _G[newFrameName .. "NameBox"]:SetText(cardData.name);
+        _G[newFrameName .. "DescBox"]:SetText(cardData.description);
+        _G[newFrameName .. "PortraitTexture"]:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark");
         
+        -- We add the newly created, correct frame to our tracking table.
         table.insert(characterCardFrames, cardFrame);
+        AIManager_Log("Created and stored frame: " .. newFrameName)
+        
         lastAnchor = cardFrame;
         cardFrame:Show();
     end
     
-    -- Anchor the "Add Character" button below the last card
+    -- Always re-anchor the "Add" button to the new last card
     AIManagerAddCharacterButton:SetPoint("TOP", lastAnchor, "BOTTOM", 0, -20);
+    AIManager_Log("Update finished. Total frames tracked: " .. #characterCardFrames)
+    AIManager_Log("--- End Update ---\n")
 end
 
 
@@ -377,6 +455,5 @@ function AIManager_RestoreDefaults(pageName)
         AIManagerDB.samplers = CopyTable(defaults.samplers);
     end
     
-    AIManager_PopulateUI();
-    print("|cff3399ffAI Manager:|r " .. pageName .. " settings restored to default.");
+    AIManager_Log("Settings restored to default for page: " .. pageName);
 end

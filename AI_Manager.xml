@@ -101,7 +101,16 @@
 					</EditBox>
 				</ScrollChild>
 			</ScrollFrame>
-
+			<!-- ADDED: Delete button for NPC cards -->
+			<Button name="$parentDeleteButton" inherits="UIPanelButtonTemplate" text="Delete">
+				<Size x="80" y="22"/>
+				<Anchors>
+					<Anchor point="TOPRIGHT" x="-10" y="-10"/>
+				</Anchors>
+				<Scripts>
+					<OnClick>AIManager_DeleteCharacterCard(self)</OnClick>
+				</Scripts>
+			</Button>
 		</Frames>
 	</Frame>
 
