@@ -25,6 +25,7 @@ local defaults = {
         system_tag = "{{{SYSTEM}}}",
         user_tag = "{{{INPUT}}}",
         assistant_tag = "{{{OUTPUT}}}",
+        stop_sequence = "Player:|</s>|\\n",
     },
     player_cards = {},
     character_cards = {}, 
@@ -41,6 +42,11 @@ local isInitialized = false;
 local promptMessageQueue = {};
 local timeSinceLastSend = 0;
 local SEND_DELAY = 0.1; -- seconds
+
+-- Variables for the thinking indicator UI
+local isThinking = false;
+local thinkingDots = ".";
+local thinkingTimer = 0;
 
 -- ===================================================================
 -- Debug Logging System
@@ -63,6 +69,16 @@ frame:SetScript("OnEvent", function(self, event, ...)
         AIManagerDB = AIManagerDB or CopyTable(defaults);
         AIManagerDB.log = AIManagerDB.log or {};
         
+        AIManagerDB.indicatorPosition = AIManagerDB.indicatorPosition or { point = "TOP", x = 0, y = -20 };
+        AIManagerThinkingIndicatorFrame:SetPoint(
+            AIManagerDB.indicatorPosition.point,
+            UIParent,
+            AIManagerDB.indicatorPosition.point,
+            AIManagerDB.indicatorPosition.x,
+            AIManagerDB.indicatorPosition.y
+        );
+        AIManagerThinkingIndicatorFrame:RegisterForDrag("LeftButton");
+
         local characterKey = UnitName("player") .. "-" .. GetRealmName();
         
         if AIManagerDB.player_card and not AIManagerDB.player_cards then
@@ -93,18 +109,14 @@ frame:SetScript("OnEvent", function(self, event, ...)
              AIManagerDB.nextCharacterId = nil 
         end
 
-        -- FIX: Override OnEnterPressed to run our logic *before* the default game logic.
         ChatFrame1EditBox:SetScript("OnEnterPressed", function(self)
             local messageText = self:GetText();
             local chatType = self:GetAttribute("chatType");
 
-            -- Check if this is a message we should intercept
             if chatType == "SAY" and messageText and messageText ~= "" and messageText:sub(1,1) ~= "/" and UnitExists("target") and not UnitIsPlayer("target") then
-                -- If so, process our custom message for Kobold
                 AIManager_ProcessChatMessage(messageText);
             end
 
-            -- Always run the original game script to send the message, show the bubble, and close the editbox.
             ChatEdit_OnEnterPressed(self);
         end);
 
@@ -124,6 +136,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_LOGOUT" then
         conversationHistory = {};
         currentTargetGUID = nil;
+        AIManager_ShowThinkingIndicator(false);
     end
 end);
 
@@ -197,7 +210,25 @@ function AIManager_RequestStatus()
     print("|cff3399ffAI Manager:|r Refreshing connection status...");
 end
 
--- This function now contains the core logic for processing and sending a prompt
+function AIManager_Indicator_OnDragStop(frame)
+    local point, _, relativePoint, x, y = frame:GetPoint();
+    AIManagerDB.indicatorPosition = {
+        point = point,
+        x = x,
+        y = y
+    };
+    AIManager_Log("Indicator position saved.");
+end
+
+function AIManager_ShowThinkingIndicator(show)
+    isThinking = show;
+    if show then
+        AIManagerThinkingIndicatorFrame:Show();
+    else
+        AIManagerThinkingIndicatorFrame:Hide();
+    end
+end
+
 function AIManager_ProcessChatMessage(messageText)
     local target = "target";
     local npcName = UnitName(target);
@@ -224,18 +255,39 @@ function AIManager_ProcessChatMessage(messageText)
     local prompt = AIManagerDB.format.system_prompt .. "\n" .. playerCard .. "\n" .. npcCard .. table.concat(conversationHistory, "") .. "\nPlayer: " .. messageText .. "\n" .. npcName .. ":";
     table.insert(conversationHistory, "\nPlayer: " .. messageText);
 
-    local samplerString = ""
+    -- Build the JSON string for samplers and stop sequences
+    local samplerParts = {}
     for k, v in pairs(AIManagerDB.samplers) do
-        samplerString = samplerString .. "\"" .. k .. "\":" .. tostring(v) .. ","
+        table.insert(samplerParts, "\"" .. k .. "\":" .. tostring(v))
     end
-    samplerString = "{" .. string.sub(samplerString, 1, -2) .. "}";
 
+    local stopSequence = AIManagerDB.format.stop_sequence or ""
+    local stopSequenceTable = {}
+    for word in string.gmatch(stopSequence, "([^|]+)") do
+        word = string.gsub(word, "^%s*(.-)%s*$", "%1") -- Trim whitespace
+        if word ~= "" then
+            if word == "\\n" then
+                table.insert(stopSequenceTable, "\"\\n\"")
+            else
+                word = string.gsub(word, "\\", "\\\\")
+                word = string.gsub(word, "\"", "\\\"")
+                table.insert(stopSequenceTable, "\"" .. word .. "\"")
+            end
+        end
+    end
+
+    if #stopSequenceTable > 0 then
+        local stopSequenceJsonArray = "[" .. table.concat(stopSequenceTable, ",") .. "]"
+        table.insert(samplerParts, "\"stop_sequence\":" .. stopSequenceJsonArray)
+    end
+
+    local finalSamplerString = "{" .. table.concat(samplerParts, ",") .. "}"
+    
     local safe_prompt = string.gsub(prompt, ";", "##SC##");
     safe_prompt = string.gsub(safe_prompt, "\n", "##NL##");
     
-    local dataString = safe_prompt .. ";" .. samplerString;
+    local dataString = safe_prompt .. ";" .. finalSamplerString;
 
-    -- Add a space after each command to match the C++ script's check
     table.insert(promptMessageQueue, "AIMGR PROMPT_START ");
     local chunkSize = 200;
     for i = 1, math.ceil(string.len(dataString) / chunkSize) do
@@ -246,7 +298,7 @@ function AIManager_ProcessChatMessage(messageText)
 end
 
 function AIManager_ChatFilter(self, event, msg, ...)
-    if string.find(msg, "[AIMgr_STATUS]", 1, true) or string.find(msg, "[AIMgr_RESPONSE]", 1, true) or string.find(msg, "[AIMgr_CONFIG]", 1, true) then
+    if string.find(msg, "[AIMgr_STATUS]", 1, true) or string.find(msg, "[AIMgr_RESPONSE]", 1, true) or string.find(msg, "[AIMgr_CONFIG]", 1, true) or string.find(msg, "[AIMgr_THINKING]", 1, true) then
         table.insert(messageQueue, msg);
         return true;
     end
@@ -268,7 +320,10 @@ updateFrame:SetScript("OnUpdate", function(self, elapsed)
         elseif string.find(msg, "[AIMgr_STATUS]", 1, true) then
             local _, _, statusValue = string.find(msg, "status=(.+)");
             if statusValue then AIManager_SetConnectionStatus(statusValue == "true") end
+        elseif string.find(msg, "[AIMgr_THINKING]", 1, true) then
+            AIManager_ShowThinkingIndicator(true);
         elseif string.find(msg, "[AIMgr_RESPONSE]", 1, true) then
+            AIManager_ShowThinkingIndicator(false);
             local _, _, responseText = string.find(msg, "%[AIMgr_RESPONSE%](.+)");
             if responseText and currentTargetGUID then
                  table.insert(conversationHistory, " " .. responseText);
@@ -285,6 +340,22 @@ updateFrame:SetScript("OnUpdate", function(self, elapsed)
             timeSinceLastSend = 0;
         end
     end
+
+    -- Animate thinking indicator text
+    if isThinking then
+        thinkingTimer = thinkingTimer + elapsed;
+        if thinkingTimer > 0.5 then
+            thinkingTimer = 0;
+            if thinkingDots == "." then
+                thinkingDots = "..";
+            elseif thinkingDots == ".." then
+                thinkingDots = "...";
+            else
+                thinkingDots = ".";
+            end
+            AIManagerThinkingIndicatorFrameText:SetText("Generating Response" .. thinkingDots);
+        end
+    end
 end)
 
 function AIManager_SaveChanges()
@@ -295,7 +366,6 @@ function AIManager_SaveChanges()
         print("|cff3399ffAI Manager:|r Network settings sent to server.");
     end
 
-    -- FIX: Read values from the EditBoxes directly, not the sliders.
     AIManagerDB.samplers.max_context_length = tonumber(AIManagerContextSizeBox:GetText()) or defaults.samplers.max_context_length;
     AIManagerDB.samplers.max_length = tonumber(AIManagerMaxLengthBox:GetText()) or defaults.samplers.max_length;
     AIManagerDB.samplers.temperature = tonumber(AIManagerTempBox:GetText()) or defaults.samplers.temperature;
@@ -307,6 +377,7 @@ function AIManager_SaveChanges()
     AIManagerDB.format.system_tag = AIManagerSystemTagBox:GetText();
     AIManagerDB.format.user_tag = AIManagerUserTagBox:GetText();
     AIManagerDB.format.assistant_tag = AIManagerAssistantTagBox:GetText();
+    AIManagerDB.format.stop_sequence = AIManagerStopSequenceBox:GetText();
     
     local characterKey = UnitName("player") .. "-" .. GetRealmName();
     if AIManagerDB.player_cards[characterKey] then
@@ -328,13 +399,12 @@ function AIManager_SaveChanges()
     end
     
     AIManager_Log("Local settings saved.");
-    AIManager_PopulateUI(); -- Refresh UI to ensure sliders match the new values
+    AIManager_PopulateUI();
 end
 
 function AIManager_PopulateUI()
     if not AIManagerDB then return end
     
-    -- Set Slider Values
     AIManagerContextSizeSlider:SetValue(AIManagerDB.samplers.max_context_length);
     AIManagerMaxLengthSlider:SetValue(AIManagerDB.samplers.max_length);
     AIManagerTempSlider:SetValue(AIManagerDB.samplers.temperature);
@@ -342,7 +412,6 @@ function AIManager_PopulateUI()
     AIManagerTopPSlider:SetValue(AIManagerDB.samplers.top_p);
     AIManagerTopKSlider:SetValue(AIManagerDB.samplers.top_k);
 
-    -- Manually update EditBox text to sync with sliders
     AIManagerContextSizeBox:SetText(string.format("%d", AIManagerDB.samplers.max_context_length));
     AIManagerMaxLengthBox:SetText(string.format("%d", AIManagerDB.samplers.max_length));
     AIManagerTempBox:SetText(string.format("%.2f", AIManagerDB.samplers.temperature));
@@ -350,13 +419,12 @@ function AIManager_PopulateUI()
     AIManagerTopPBox:SetText(string.format("%.2f", AIManagerDB.samplers.top_p));
     AIManagerTopKBox:SetText(string.format("%d", AIManagerDB.samplers.top_k));
 
-    -- Set Format Page Values
     AIManagerSysPromptBox:SetText(AIManagerDB.format.system_prompt);
     AIManagerSystemTagBox:SetText(AIManagerDB.format.system_tag);
     AIManagerUserTagBox:SetText(AIManagerDB.format.user_tag);
     AIManagerAssistantTagBox:SetText(AIManagerDB.format.assistant_tag);
+    AIManagerStopSequenceBox:SetText(AIManagerDB.format.stop_sequence or defaults.format.stop_sequence);
     
-    -- Update Character Page
     AIManager_UpdateCharacterCards();
 end
 
@@ -465,8 +533,6 @@ end
 -- Restore & Delete Defaults Feature
 -- ===================================================================
 function AIManager_ShowRestoreDefaultsConfirmation(pageName)
-    -- This function is called by the button's OnClick script.
-    -- It will now call the actual restore logic.
     AIManager_RestoreDefaults(pageName);
 end
 
@@ -479,6 +545,5 @@ function AIManager_RestoreDefaults(pageName)
     
     AIManager_Log("Settings restored to default for page: " .. pageName);
     
-    -- After restoring the defaults, we need to update the UI to show them.
     AIManager_PopulateUI();
 end
