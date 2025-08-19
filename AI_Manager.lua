@@ -448,7 +448,9 @@ end
 -- Restore & Delete Defaults Feature
 -- ===================================================================
 function AIManager_ShowRestoreDefaultsConfirmation(pageName)
-    -- This would need a custom dialog as well, if we want to keep it.
+    -- This function is called by the button's OnClick script.
+    -- It will now call the actual restore logic.
+    AIManager_RestoreDefaults(pageName);
 end
 
 function AIManager_RestoreDefaults(pageName)
@@ -459,4 +461,7 @@ function AIManager_RestoreDefaults(pageName)
     end
     
     AIManager_Log("Settings restored to default for page: " .. pageName);
+    
+    -- After restoring the defaults, we need to update the UI to show them.
+    AIManager_PopulateUI();
 end
