@@ -11,5 +11,5 @@
 ## SlashCmds: /aim, /aimanager
 ## SavedVariables: AIManagerDB
 
+
 AI_Manager.xml
-AI_Manager.lua

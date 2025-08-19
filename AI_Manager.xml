@@ -18,101 +18,7 @@
 		</ThumbTexture>
 	</Slider>
 
-	<!-- Virtual Template for a Character Card -->
-	<Frame name="AIManagerCharacterCardTemplate" virtual="true">
-		<Size x="540" y="150"/>
-		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
-			<EdgeSize val="32"/>
-			<TileSize val="256"/>
-			<BackgroundInsets>
-				<AbsInset left="5" right="5" top="5" bottom="5"/>
-			</BackgroundInsets>
-		</Backdrop>
-		<Frames>
-			<Frame name="$parentPortraitFrame">
-				<Size x="108" y="108"/>
-				<Anchors>
-					<Anchor point="TOPLEFT" x="20" y="-31"/>
-				</Anchors>
-				<Layers>
-					<Layer level="BACKGROUND">
-						<Texture>
-							<Size x="100" y="100"/>
-							<Anchors>
-								<Anchor point="CENTER"/>
-							</Anchors>
-							<Color r="0" g="0" b="0" a="1"/>
-						</Texture>
-					</Layer>
-					<Layer level="ARTWORK">
-						<Texture name="$parentPortraitTexture">
-							<Size x="100" y="100"/>
-							<Anchors>
-								<Anchor point="CENTER"/>
-							</Anchors>
-						</Texture>
-					</Layer>
-				</Layers>
-				<Frames>
-					<Frame setAllPoints="true">
-						<Backdrop edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
-							<EdgeSize val="16"/>
-							<TileSize val="16"/>
-							<BackgroundInsets>
-								<AbsInset left="4" right="4" top="4" bottom="4"/>
-							</BackgroundInsets>
-						</Backdrop>
-					</Frame>
-				</Frames>
-			</Frame>
-			<EditBox name="$parentNameBox" inherits="InputBoxTemplate" autoFocus="false" letters="12">
-				<Size x="102" y="32"/>
-				<Anchors>
-					<Anchor point="TOPLEFT" relativeTo="$parentPortraitFrame" relativePoint="TOPLEFT" x="5" y="25"/>
-				</Anchors>
-				<Scripts>
-					<OnEnterPressed>self:ClearFocus()</OnEnterPressed>
-				</Scripts>
-			</EditBox>
-			<ScrollFrame name="$parentDescScrollFrame" inherits="UIPanelScrollFrameTemplate" enableMouse="true">
-				<Size x="370" y="100"/>
-				<Anchors>
-					<Anchor point="TOPLEFT" relativeTo="$parentPortraitFrame" relativePoint="TOPRIGHT" x="5" y="-5"/>
-				</Anchors>
-				<Scripts>
-					<OnMouseDown>
-						_G[self:GetParent():GetName().."DescBox"]:SetFocus();
-						_G[self:GetParent():GetName().."DescBox"]:EnableKeyboard(true);
-					</OnMouseDown>
-				</Scripts>
-				<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" tile="true">
-					<Color r="0" g="0" b="0" a="0.5"/>
-				</Backdrop>
-				<ScrollChild>
-					<EditBox name="$parentDescBox" multiLine="true" autoFocus="false">
-						<Size x="370" y="120"/>
-						<Scripts>
-							<OnEnterPressed>self:EnableKeyboard(false); self:ClearFocus()</OnEnterPressed>
-							<OnEscapePressed>self:EnableKeyboard(false); self:ClearFocus()</OnEscapePressed>
-						</Scripts>
-						<FontString inherits="GameFontNormal">
-							<Color r="1.0" g="1.0" b="1.0"/>
-						</FontString>
-					</EditBox>
-				</ScrollChild>
-			</ScrollFrame>
-			<!-- ADDED: Delete button for NPC cards -->
-			<Button name="$parentDeleteButton" inherits="UIPanelButtonTemplate" text="Delete">
-				<Size x="80" y="22"/>
-				<Anchors>
-					<Anchor point="TOPRIGHT" x="-10" y="-10"/>
-				</Anchors>
-				<Scripts>
-					<OnClick>AIManager_DeleteCharacterCard(self)</OnClick>
-				</Scripts>
-			</Button>
-		</Frames>
-	</Frame>
+	<!-- REMOVED: Virtual Template for a Character Card -->
 
 	<Frame name="AIManagerFrame" parent="UIParent" movable="true" enableMouse="true" hidden="true" clampedToScreen="true">
 		<Size x="750" y="550"/>
@@ -704,16 +610,104 @@
 								</Frames>
 							</Frame>
 
-							<!-- Add Character Button -->
-							<Button name="AIManagerAddCharacterButton" inherits="UIPanelButtonTemplate" text="Add Character">
-								<Size x="120" y="25"/>
+							<!-- MODIFIED: Static NPC Target Card (Explicit Definition) -->
+							<Frame name="AIManagerTargetCardFrame">
+								<Size x="540" y="150"/>
 								<Anchors>
 									<Anchor point="TOP" relativeTo="AIManagerPlayerCardFrame" relativePoint="BOTTOM" x="0" y="-20"/>
 								</Anchors>
-								<Scripts>
-									<OnClick>AIManager_AddCharacterCard()</OnClick>
-								</Scripts>
-							</Button>
+								<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+									<EdgeSize val="32"/>
+									<TileSize val="256"/>
+									<BackgroundInsets>
+										<AbsInset left="5" right="5" top="5" bottom="5"/>
+									</BackgroundInsets>
+								</Backdrop>
+								<Frames>
+									<Frame name="AIManagerTargetCardFramePortraitFrame">
+										<Size x="108" y="108"/>
+										<Anchors>
+											<Anchor point="TOPLEFT" x="20" y="-31"/>
+										</Anchors>
+										<Layers>
+											<Layer level="BACKGROUND">
+												<Texture>
+													<Size x="100" y="100"/>
+													<Anchors>
+														<Anchor point="CENTER"/>
+													</Anchors>
+													<Color r="0" g="0" b="0" a="1"/>
+												</Texture>
+											</Layer>
+											<Layer level="ARTWORK">
+												<Texture name="AIManagerTargetCardFramePortraitTexture">
+													<Size x="100" y="100"/>
+													<Anchors>
+														<Anchor point="CENTER"/>
+													</Anchors>
+												</Texture>
+											</Layer>
+										</Layers>
+										<Frames>
+											<Frame setAllPoints="true">
+												<Backdrop edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+													<EdgeSize val="16"/>
+													<TileSize val="16"/>
+													<BackgroundInsets>
+														<AbsInset left="4" right="4" top="4" bottom="4"/>
+													</BackgroundInsets>
+												</Backdrop>
+											</Frame>
+										</Frames>
+									</Frame>
+									<EditBox name="AIManagerTargetCardFrameNameBox" inherits="InputBoxTemplate" autoFocus="false" letters="24" enable="false">
+										<Size x="102" y="32"/>
+										<Anchors>
+											<Anchor point="TOPLEFT" relativeTo="AIManagerTargetCardFramePortraitFrame" relativePoint="TOPLEFT" x="5" y="25"/>
+										</Anchors>
+										<Scripts>
+											<OnEnterPressed>self:ClearFocus()</OnEnterPressed>
+										</Scripts>
+									</EditBox>
+									<ScrollFrame name="AIManagerTargetCardFrameDescScrollFrame" inherits="UIPanelScrollFrameTemplate" enableMouse="true">
+										<Size x="370" y="100"/>
+										<Anchors>
+											<Anchor point="TOPLEFT" relativeTo="AIManagerTargetCardFramePortraitFrame" relativePoint="TOPRIGHT" x="5" y="-5"/>
+										</Anchors>
+										<Scripts>
+											<OnMouseDown>
+												AIManagerTargetCardFrameDescBox:SetFocus();
+												AIManagerTargetCardFrameDescBox:EnableKeyboard(true);
+											</OnMouseDown>
+										</Scripts>
+										<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" tile="true">
+											<Color r="0" g="0" b="0" a="0.5"/>
+										</Backdrop>
+										<ScrollChild>
+											<EditBox name="AIManagerTargetCardFrameDescBox" multiLine="true" autoFocus="false">
+												<Size x="370" y="120"/>
+												<Scripts>
+													<OnEnterPressed>self:EnableKeyboard(false); self:ClearFocus()</OnEnterPressed>
+													<OnEscapePressed>self:EnableKeyboard(false); self:ClearFocus()</OnEscapePressed>
+												</Scripts>
+												<FontString inherits="GameFontNormal">
+													<Color r="1.0" g="1.0" b="1.0"/>
+												</FontString>
+											</EditBox>
+										</ScrollChild>
+									</ScrollFrame>
+								</Frames>
+								<Layers>
+									<Layer level="OVERLAY">
+										<FontString name="AIManagerTargetHintText" inherits="GameFontNormalLarge" text="Select a Target">
+											<Anchors>
+												<Anchor point="CENTER"/>
+											</Anchors>
+											<Color r="1.0" g="0.1" b="0.1"/>
+										</FontString>
+									</Layer>
+								</Layers>
+							</Frame>
 
 							<!-- Apply Button for Characters Page -->
 							<Button name="AIManagerCharactersApplyButton" inherits="UIPanelButtonTemplate" text="Apply">
