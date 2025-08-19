@@ -295,12 +295,14 @@ function AIManager_SaveChanges()
         print("|cff3399ffAI Manager:|r Network settings sent to server.");
     end
 
-    AIManagerDB.samplers.max_context_length = AIManagerContextSizeSlider:GetValue();
-    AIManagerDB.samplers.max_length = AIManagerMaxLengthSlider:GetValue();
-    AIManagerDB.samplers.temperature = AIManagerTempSlider:GetValue();
-    AIManagerDB.samplers.repetition_penalty = AIManagerRepPenSlider:GetValue();
-    AIManagerDB.samplers.top_p = AIManagerTopPSlider:GetValue();
-    AIManagerDB.samplers.top_k = AIManagerTopKSlider:GetValue();
+    -- FIX: Read values from the EditBoxes directly, not the sliders.
+    AIManagerDB.samplers.max_context_length = tonumber(AIManagerContextSizeBox:GetText()) or defaults.samplers.max_context_length;
+    AIManagerDB.samplers.max_length = tonumber(AIManagerMaxLengthBox:GetText()) or defaults.samplers.max_length;
+    AIManagerDB.samplers.temperature = tonumber(AIManagerTempBox:GetText()) or defaults.samplers.temperature;
+    AIManagerDB.samplers.repetition_penalty = tonumber(AIManagerRepPenBox:GetText()) or defaults.samplers.repetition_penalty;
+    AIManagerDB.samplers.top_p = tonumber(AIManagerTopPBox:GetText()) or defaults.samplers.top_p;
+    AIManagerDB.samplers.top_k = tonumber(AIManagerTopKBox:GetText()) or defaults.samplers.top_k;
+    
     AIManagerDB.format.system_prompt = AIManagerSysPromptBox:GetText();
     AIManagerDB.format.system_tag = AIManagerSystemTagBox:GetText();
     AIManagerDB.format.user_tag = AIManagerUserTagBox:GetText();
@@ -326,20 +328,35 @@ function AIManager_SaveChanges()
     end
     
     AIManager_Log("Local settings saved.");
+    AIManager_PopulateUI(); -- Refresh UI to ensure sliders match the new values
 end
 
 function AIManager_PopulateUI()
     if not AIManagerDB then return end
+    
+    -- Set Slider Values
     AIManagerContextSizeSlider:SetValue(AIManagerDB.samplers.max_context_length);
     AIManagerMaxLengthSlider:SetValue(AIManagerDB.samplers.max_length);
     AIManagerTempSlider:SetValue(AIManagerDB.samplers.temperature);
     AIManagerRepPenSlider:SetValue(AIManagerDB.samplers.repetition_penalty);
     AIManagerTopPSlider:SetValue(AIManagerDB.samplers.top_p);
     AIManagerTopKSlider:SetValue(AIManagerDB.samplers.top_k);
+
+    -- Manually update EditBox text to sync with sliders
+    AIManagerContextSizeBox:SetText(string.format("%d", AIManagerDB.samplers.max_context_length));
+    AIManagerMaxLengthBox:SetText(string.format("%d", AIManagerDB.samplers.max_length));
+    AIManagerTempBox:SetText(string.format("%.2f", AIManagerDB.samplers.temperature));
+    AIManagerRepPenBox:SetText(string.format("%.2f", AIManagerDB.samplers.repetition_penalty));
+    AIManagerTopPBox:SetText(string.format("%.2f", AIManagerDB.samplers.top_p));
+    AIManagerTopKBox:SetText(string.format("%d", AIManagerDB.samplers.top_k));
+
+    -- Set Format Page Values
     AIManagerSysPromptBox:SetText(AIManagerDB.format.system_prompt);
     AIManagerSystemTagBox:SetText(AIManagerDB.format.system_tag);
     AIManagerUserTagBox:SetText(AIManagerDB.format.user_tag);
     AIManagerAssistantTagBox:SetText(AIManagerDB.format.assistant_tag);
+    
+    -- Update Character Page
     AIManager_UpdateCharacterCards();
 end
 
