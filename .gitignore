@@ -42,3 +42,9 @@
 
 # Ignore Visual Studio temporary files
 .vs/
+/libs/AceAddon-3.0
+/libs/AceBucket-3.0
+/libs/AceComm-3.0
+/libs
+/-OLD-AI_Manager.lua
+/-OLD-AI_Manager.xml
